@@ -98,10 +98,14 @@ export const cascadeData = {
   } as Record<string, string>,
 };
 
-export const recentSessions = [
-  { date: '2026-04-15', class: 'FY-A Batch 1 (2211)', attendance: 94 },
-  { date: '2026-04-14', class: 'SY-C Batch 3 (2215)', attendance: 88 },
-  { date: '2026-04-13', class: 'TY-D Batch 2 (2216)', attendance: 91 },
-  { date: '2026-04-12', class: 'FY-B Batch 1 (2213)', attendance: 96 },
-  { date: '2026-04-11', class: 'SY-A Batch 2 (2213)', attendance: 85 },
+export interface RecentSession {
+  date: string;
+  class: string;
+  attendance: number;
+  confirmed: boolean;
+}
+
+export const recentSessions: RecentSession[] = [
+  { date: '2026-04-15', class: 'FY-A Batch 1 (2211)', attendance: 94, confirmed: false },
+  { date: '2026-04-14', class: 'SY-C Batch 3 (2215)', attendance: 88, confirmed: true },
 ];

@@ -40,23 +40,23 @@ const SessionSetup = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-6xl items-center gap-4 px-6 py-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
+        <div className="mx-auto flex max-w-6xl items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3 sm:py-4">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate('/dashboard')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-              <ScanFace className="h-5 w-5 text-primary-foreground" />
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-primary">
+              <ScanFace className="h-4 w-4 sm:h-5 sm:w-5 text-primary-foreground" />
             </div>
-            <span className="text-lg font-semibold text-foreground">Start Session</span>
+            <span className="text-base sm:text-lg font-semibold text-foreground">Start Session</span>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-lg px-6 py-10">
+      <main className="mx-auto max-w-lg px-4 sm:px-6 py-8 sm:py-10">
         <Card className="border-border/50">
           <CardHeader>
-            <CardTitle className="text-lg font-medium">Select Class</CardTitle>
+            <CardTitle className="text-base sm:text-lg font-medium">Select Class</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="space-y-2">
