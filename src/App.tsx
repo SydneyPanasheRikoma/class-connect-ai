@@ -1,10 +1,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import Index from "./pages/Index.tsx";
-import NotFound from "./pages/NotFound.tsx";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import SessionSetup from "./pages/SessionSetup";
+import LiveMap from "./pages/LiveMap";
+import Review from "./pages/Review";
+import Summary from "./pages/Summary";
+import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
@@ -15,8 +20,12 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="/" element={<Login />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/session/setup" element={<SessionSetup />} />
+          <Route path="/session/live" element={<LiveMap />} />
+          <Route path="/session/review" element={<Review />} />
+          <Route path="/session/summary" element={<Summary />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
