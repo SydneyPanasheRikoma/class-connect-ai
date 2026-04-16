@@ -1,3 +1,4 @@
+import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -18,9 +19,14 @@ const Summary = () => {
     return null;
   }
 
-  const occupied = desks.filter(d => d.occupied && d.student);
-  const confirmed = occupied.filter(d => d.student?.status === 'confirmed');
-  const unresolved = occupied.filter(d => d.student?.status !== 'confirmed');
+  // Clear active session when user views summary (marks session as completed)
+  React.useEffect(() => {
+    sessionStorage.removeItem('activeSession');
+  }, []);
+
+  const occupied = desks.filter(d => d.occupied).flatMap(d => d.students);
+  const confirmed = occupied.filter(d => d.status === 'confirmed');
+  const unresolved = occupied.filter(d => d.status !== 'confirmed');
   const pct = occupied.length ? Math.round((confirmed.length / occupied.length) * 100) : 0;
 
   const stats = [
@@ -73,7 +79,10 @@ const Summary = () => {
           </CardContent>
         </Card>
 
-        <Button variant="outline" className="w-full" onClick={() => navigate('/dashboard')}>
+        <Button variant="outline" className="w-full" onClick={() => {
+          sessionStorage.removeItem('activeSession');
+          navigate('/dashboard');
+        }}>
           Back to Dashboard
         </Button>
       </main>

@@ -17,7 +17,7 @@ export interface Desk {
   row: number;
   col: number;
   occupied: boolean;
-  student?: Student;
+  students: Student[]; // 2-seater desk: can have up to 2 students
 }
 
 export interface SessionConfig {

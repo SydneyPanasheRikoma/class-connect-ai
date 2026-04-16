@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,8 +9,15 @@ import { cn } from '@/lib/utils';
 const Dashboard = () => {
   const navigate = useNavigate();
   const [showAttendance, setShowAttendance] = useState(false);
+  const [sessions, setSessions] = useState(recentSessions.filter(s => s.confirmed));
 
-  const hasUnconfirmed = recentSessions.some(s => !s.confirmed);
+  // Filter out unconfirmed sessions on mount to show only completed sessions
+  React.useEffect(() => {
+    // Keep only confirmed sessions, removing any unconfirmed/active ones
+    setSessions(prev => prev.filter(s => s.confirmed));
+  }, []);
+
+  const hasUnconfirmed = sessions.some(s => !s.confirmed);
 
   const stats = [
     { label: 'Total Classes', value: '47', icon: Users, color: 'text-primary' },
@@ -111,7 +118,7 @@ const Dashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {recentSessions.map((s, i) => (
+                  {sessions.map((s, i) => (
                     <tr key={i} className="border-b border-border/50 last:border-0">
                       <td className="py-3 pr-4 text-foreground text-xs sm:text-sm">{s.date}</td>
                       <td className="py-3 pr-4 text-foreground text-xs sm:text-sm">{s.class}</td>

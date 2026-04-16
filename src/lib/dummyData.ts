@@ -1,54 +1,171 @@
 import { Student, Desk } from './types';
 
-const studentData: Omit<Student, 'deskIndex' | 'status' | 'manuallyAssigned'>[] = [
-  { id: '1', name: 'Aiden Smith', rollNumber: 'FYA01', srn: 'SRN2023001', confidence: 96, isIdentified: true },
-  { id: '2', name: 'Emily Carter', rollNumber: 'FYA02', srn: 'SRN2023002', confidence: 94, isIdentified: true },
-  { id: '3', name: 'Liam Johnson', rollNumber: 'FYA03', srn: 'SRN2023003', confidence: 91, isIdentified: true },
-  { id: '4', name: 'Aarav Sharma', rollNumber: 'FYA04', srn: 'SRN2023004', confidence: 98, isIdentified: true },
-  { id: '5', name: 'Neha Kulkarni', rollNumber: 'FYA05', srn: 'SRN2023005', confidence: 89, isIdentified: true },
-  { id: '6', name: 'Riya Mehta', rollNumber: 'FYA06', srn: 'SRN2023006', confidence: 93, isIdentified: true },
-  { id: '7', name: 'Aditya Verma', rollNumber: 'FYA07', srn: 'SRN2023007', confidence: 97, isIdentified: true },
-  { id: '8', name: 'Priya Iyer', rollNumber: 'FYA08', srn: 'SRN2023008', confidence: 92, isIdentified: true },
-  { id: '9', name: 'Kabir Singh', rollNumber: 'FYA09', srn: 'SRN2023009', confidence: 95, isIdentified: true },
-  { id: '10', name: 'Anika Patel', rollNumber: 'FYA10', srn: 'SRN2023010', confidence: 90, isIdentified: true },
-  { id: '11', name: 'Tendai Moyo', rollNumber: 'FYA11', srn: 'SRN2023011', confidence: 88, isIdentified: true },
-  { id: '12', name: 'Tariro Chikore', rollNumber: 'FYA12', srn: 'SRN2023012', confidence: 99, isIdentified: true },
-  { id: '13', name: 'Rudo Nhamo', rollNumber: 'FYA13', srn: 'SRN2023013', confidence: 85, isIdentified: true },
-  { id: '14', name: 'Unknown', rollNumber: '', srn: '', confidence: 0, isIdentified: false },
-  { id: '15', name: 'Unknown', rollNumber: '', srn: '', confidence: 0, isIdentified: false },
-  { id: '16', name: 'Kudakwashe Bvuma', rollNumber: 'FYA14', srn: 'SRN2023014', confidence: 91, isIdentified: true },
-  { id: '17', name: 'Nyasha Moyo', rollNumber: 'FYA15', srn: 'SRN2023015', confidence: 87, isIdentified: true },
-  { id: '18', name: 'Unknown', rollNumber: '', srn: '', confidence: 0, isIdentified: false },
-];
+const DESK_ROWS = 5;
+const DESK_COLS = 4;
+const SEATS_PER_DESK = 2;
+const TOTAL_SEATS = DESK_ROWS * DESK_COLS * SEATS_PER_DESK;
+const ABSENT_SEATS_COUNT = 3;
+const FIXED_UNIDENTIFIED_ROLL_NUMBERS = [12, 22, 27] as const;
+const FIXED_UNIDENTIFIED_SEAT_POSITIONS = new Set(
+  FIXED_UNIDENTIFIED_ROLL_NUMBERS.map((roll) => roll - 1)
+);
+
+const identifiedNames = [
+  'Aiden Smith',
+  'Emily Carter',
+  'Liam Johnson',
+  'Aarav Sharma',
+  'Neha Kulkarni',
+  'Riya Mehta',
+  'Aditya Verma',
+  'Priya Iyer',
+  'Kabir Singh',
+  'Anika Patel',
+  'Tendai Moyo',
+  'Tariro Chikore',
+  'Rudo Nhamo',
+  'Kudakwashe Bvuma',
+  'Nyasha Moyo',
+  'Zainab Hassan',
+  'Raj Patel',
+  'Maya Desai',
+  'Mohammed Ali',
+  'Sophia Brown',
+  'Diego Martinez',
+  'Olivia Johnson',
+  'Chen Wei',
+  'Priya Singh',
+  'Kofi Mensah',
+  'Amelia White',
+  'Viktor Petrov',
+  'Fatima Khan',
+  'Lucas Silva',
+  'Yuki Tanaka',
+  'Isabella Garcia',
+  'Marcus Johnson',
+  'Chioma Okafor',
+  'David Chen',
+  'Amira Hassan',
+  'James Thompson',
+  'Lucia Rossi',
+  'Hassan Ibrahim',
+  'Sophie Laurent',
+  'Anton Smirnov',
+] as const;
+
+const manualRollDatabase: Record<string, { name: string; srn: string }> = {
+  FYA60: { name: 'Blessing Dube', srn: 'SRN2023060' },
+  FYA61: { name: 'Tapiwa Chuma', srn: 'SRN2023061' },
+  FYA62: { name: 'Farai Mlambo', srn: 'SRN2023062' },
+};
+
+const fallbackManualNames = [
+  'Ashley Moyo',
+  'Brian Ncube',
+  'Chipo Dlamini',
+  'Daniel Mutsvairo',
+  'Eunice Sithole',
+  'Farai Chitongo',
+  'Grace Chari',
+  'Henry Mbewe',
+  'Irene Mukwasha',
+  'Jason Muzenda',
+] as const;
+
+function pickRandomIndices(total: number, count: number, exclude = new Set<number>()) {
+  const candidates: number[] = [];
+  for (let i = 0; i < total; i++) {
+    if (!exclude.has(i)) candidates.push(i);
+  }
+  for (let i = candidates.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+  }
+  return new Set(candidates.slice(0, Math.min(count, candidates.length)));
+}
+
+export function lookupManualStudentByRoll(rollNumber: string) {
+  const normalizedRoll = rollNumber.trim().toUpperCase();
+  const directMatch = manualRollDatabase[normalizedRoll];
+  if (directMatch) return directMatch;
+
+  const rollDigitsMatch = normalizedRoll.match(/\d+/);
+  const numericPart = rollDigitsMatch ? parseInt(rollDigitsMatch[0], 10) : 0;
+  const nameIndex = numericPart % fallbackManualNames.length;
+
+  return {
+    name: fallbackManualNames[nameIndex],
+    srn: `SRN2023${String(Math.max(numericPart, 1)).padStart(3, '0')}`,
+  };
+}
 
 export function generateStudents(): Student[] {
-  return studentData.map((s, i) => ({
-    ...s,
+  return identifiedNames.map((name, i) => ({
+    id: `identified-${i + 1}`,
+    name,
+    rollNumber: `FYA${String(i + 1).padStart(2, '0')}`,
+    srn: `SRN2023${String(i + 1).padStart(3, '0')}`,
+    confidence: 85 + Math.floor(Math.random() * 15),
+    isIdentified: true,
     deskIndex: i,
     status: 'neutral' as const,
   }));
 }
 
 export function generateDesks(students: Student[]): Desk[] {
-  const rows = 5;
-  const cols = 4;
+  const rows = DESK_ROWS;
+  const cols = DESK_COLS;
   const desks: Desk[] = [];
-  let studentIdx = 0;
+  // Keep exactly these seats unidentified: 12, 22, 27 (1-based seat positions).
+  const unidentifiedSeatPositions = new Set(FIXED_UNIDENTIFIED_SEAT_POSITIONS);
+  // Keep 3 absences random, but never override fixed unidentified seats.
+  const absentSeatPositions = pickRandomIndices(TOTAL_SEATS, ABSENT_SEATS_COUNT, unidentifiedSeatPositions);
+  let identifiedIdx = 0;
+  let unknownIdx = 1;
+
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const idx = r * cols + c;
-      if (studentIdx < students.length) {
-        desks.push({
-          id: `desk-${idx}`,
-          row: r,
-          col: c,
-          occupied: true,
-          student: students[studentIdx],
-        });
-        studentIdx++;
-      } else {
-        desks.push({ id: `desk-${idx}`, row: r, col: c, occupied: false });
+      const deskStudents: Student[] = [];
+
+      for (let seat = 0; seat < SEATS_PER_DESK; seat++) {
+        const seatPosition = idx * SEATS_PER_DESK + seat;
+
+        if (absentSeatPositions.has(seatPosition)) {
+          continue;
+        }
+
+        if (unidentifiedSeatPositions.has(seatPosition)) {
+          deskStudents.push({
+            id: `unknown-${unknownIdx}`,
+            name: 'Unknown',
+            rollNumber: '',
+            srn: '',
+            confidence: 0,
+            isIdentified: false,
+            deskIndex: seatPosition,
+            status: 'neutral',
+          });
+          unknownIdx++;
+        } else {
+          const base = students[identifiedIdx % students.length];
+          deskStudents.push({
+            ...base,
+            id: `${base.id}-seat-${seatPosition}`,
+            deskIndex: seatPosition,
+            status: 'neutral',
+          });
+          identifiedIdx++;
+        }
       }
+
+      desks.push({
+        id: `desk-${idx}`,
+        row: r,
+        col: c,
+        occupied: deskStudents.length > 0,
+        students: deskStudents,
+      });
     }
   }
   return desks;

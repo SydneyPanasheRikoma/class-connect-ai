@@ -2,7 +2,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Desk } from '@/lib/types';
-import { ScanFace, ArrowLeft, CheckCircle, AlertTriangle } from 'lucide-react';
+import { ScanFace, ArrowLeft, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Review = () => {
@@ -19,9 +19,9 @@ const Review = () => {
     return null;
   }
 
-  const occupied = desks.filter(d => d.occupied && d.student);
-  const confirmed = occupied.filter(d => d.student?.status === 'confirmed');
-  const pct = occupied.length ? Math.round((confirmed.length / occupied.length) * 100) : 0;
+  const occupied = desks.filter(d => d.occupied).flatMap(d => d.students);
+  const approved = occupied.length;
+  const pct = occupied.length ? 100 : 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -60,25 +60,15 @@ const Review = () => {
                   {occupied.map((d, i) => (
                     <tr key={d.id} className="border-b border-border/50 last:border-0">
                       <td className="py-2.5 sm:py-3 pr-3 sm:pr-4 text-muted-foreground">{i + 1}</td>
-                      <td className="py-2.5 sm:py-3 pr-3 sm:pr-4 font-medium text-foreground">{d.student?.rollNumber || '—'}</td>
-                      <td className="py-2.5 sm:py-3 pr-3 sm:pr-4 text-foreground hidden sm:table-cell">{d.student?.isIdentified ? d.student.name : 'Unknown'}</td>
-                      <td className="py-2.5 sm:py-3 pr-3 sm:pr-4 text-muted-foreground hidden sm:table-cell">{d.student?.srn || '—'}</td>
+                      <td className="py-2.5 sm:py-3 pr-3 sm:pr-4 font-medium text-foreground">{d.rollNumber || '—'}</td>
+                      <td className="py-2.5 sm:py-3 pr-3 sm:pr-4 text-foreground hidden sm:table-cell">{d.isIdentified ? d.name : 'Unknown'}</td>
+                      <td className="py-2.5 sm:py-3 pr-3 sm:pr-4 text-muted-foreground hidden sm:table-cell">{d.srn || '—'}</td>
                       <td className="py-2.5 sm:py-3 text-right">
                         <span className={cn(
                           'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] sm:text-xs font-medium',
-                          d.student?.status === 'confirmed'
-                            ? 'bg-success/15 text-success'
-                            : d.student?.status === 'identified'
-                              ? 'bg-success/10 text-success'
-                              : 'bg-warning/10 text-warning'
+                          'bg-success/15 text-success'
                         )}>
-                          {d.student?.status === 'confirmed' ? (
-                            <><CheckCircle className="h-3 w-3" /> Confirmed</>
-                          ) : d.student?.status === 'identified' ? (
-                            <><CheckCircle className="h-3 w-3" /> Identified</>
-                          ) : (
-                            <><AlertTriangle className="h-3 w-3" /> Unidentified</>
-                          )}
+                          <><CheckCircle className="h-3 w-3" /> Approved</>
                         </span>
                       </td>
                     </tr>
@@ -91,7 +81,7 @@ const Review = () => {
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg bg-card border border-border/50 p-4">
           <div className="text-xs sm:text-sm text-muted-foreground">
-            {confirmed.length}/{occupied.length} confirmed · {corrections} corrections · {pct}%
+            {approved}/{occupied.length} approved · {corrections} corrections · {pct}%
           </div>
           <Button
             className="w-full sm:w-auto"

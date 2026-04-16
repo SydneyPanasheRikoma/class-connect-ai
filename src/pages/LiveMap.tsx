@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { generateStudents, generateDesks } from '@/lib/dummyData';
+import { generateStudents, generateDesks, lookupManualStudentByRoll } from '@/lib/dummyData';
 import { Desk, Student, StudentStatus } from '@/lib/types';
 import { ScanFace, ArrowLeft, CheckCircle, AlertTriangle, X, Save, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -19,6 +19,7 @@ const LiveMap = () => {
   const [phase, setPhase] = useState<Phase>('empty');
   const [desks, setDesks] = useState<Desk[]>([]);
   const [selectedDesk, setSelectedDesk] = useState<Desk | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [manualRoll, setManualRoll] = useState('');
   const [corrections, setCorrections] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
@@ -30,59 +31,83 @@ const LiveMap = () => {
     const timers = [
       setTimeout(() => { setDesks(allDesks); setPhase('desks'); }, 800),
       setTimeout(() => {
-        setDesks(prev => prev.map(d => d.student ? { ...d, student: { ...d.student, status: 'neutral' as StudentStatus } } : d));
+        setDesks(prev => prev.map(d => ({
+          ...d,
+          students: d.students.map(s => ({ ...s, status: 'neutral' as StudentStatus }))
+        })));
         setPhase('students');
       }, 1800),
       setTimeout(() => {
-        setDesks(prev => prev.map(d => {
-          if (!d.student) return d;
-          const status: StudentStatus = d.student.isIdentified ? 'identified' : 'unidentified';
-          return { ...d, student: { ...d.student, status } };
-        }));
+        setDesks(prev => prev.map(d => ({
+          ...d,
+          students: d.students.map(s => {
+            // Auto-confirm identified students, mark unidentified for manual assignment
+            const status: StudentStatus = s.isIdentified ? 'confirmed' : 'unidentified';
+            return { ...s, status };
+          })
+        })));
         setPhase('ready');
       }, 3800),
     ];
     return () => timers.forEach(clearTimeout);
   }, []);
 
-  const confirmStudent = useCallback((deskId: string) => {
+  const confirmStudent = useCallback((deskId: string, studentId: string) => {
     setDesks(prev => prev.map(d =>
-      d.id === deskId && d.student
-        ? { ...d, student: { ...d.student, status: 'confirmed' as StudentStatus } }
+      d.id === deskId
+        ? {
+            ...d,
+            students: d.students.map(s =>
+              s.id === studentId ? { ...s, status: 'confirmed' as StudentStatus } : s
+            )
+          }
         : d
     ));
     setSelectedDesk(null);
+    setSelectedStudentId(null);
   }, []);
 
-  const assignRoll = useCallback((deskId: string, roll: string) => {
+  const assignRoll = useCallback((deskId: string, studentId: string, roll: string) => {
+    const normalizedRoll = roll.trim().toUpperCase();
+    const mappedStudent = lookupManualStudentByRoll(normalizedRoll);
+
     setDesks(prev => prev.map(d =>
-      d.id === deskId && d.student
+      d.id === deskId
         ? {
             ...d,
-            student: {
-              ...d.student,
-              rollNumber: roll,
-              status: 'confirmed' as StudentStatus,
-              isIdentified: true,
-              manuallyAssigned: true,
-            },
+            students: d.students.map(s =>
+              s.id === studentId
+                ? {
+                    ...s,
+                    name: mappedStudent.name,
+                    rollNumber: normalizedRoll,
+                    srn: mappedStudent.srn,
+                    confidence: 100,
+                    status: 'confirmed' as StudentStatus,
+                    isIdentified: true,
+                    manuallyAssigned: true,
+                  }
+                : s
+            )
           }
         : d
     ));
     setCorrections(c => c + 1);
     setManualRoll('');
     setSelectedDesk(null);
+    setSelectedStudentId(null);
   }, []);
 
   const occupiedDesks = desks.filter(d => d.occupied);
-  const identified = occupiedDesks.filter(d => d.student?.isIdentified && d.student.status !== 'unidentified');
-  const unidentified = occupiedDesks.filter(d => !d.student?.isIdentified || d.student?.status === 'unidentified');
-  const confirmed = occupiedDesks.filter(d => d.student?.status === 'confirmed');
-  const allConfirmed = occupiedDesks.length > 0 && confirmed.length === occupiedDesks.length;
-  const pct = occupiedDesks.length ? Math.round((confirmed.length / occupiedDesks.length) * 100) : 0;
+  const allStudents = occupiedDesks.flatMap(d => d.students);
+  const identified = allStudents.filter(s => s.isIdentified && s.status !== 'unidentified');
+  const unidentified = allStudents.filter(s => !s.isIdentified || s.status === 'unidentified');
+  const confirmed = allStudents.filter(s => s.status === 'confirmed');
+  // Enable finalize when all unidentified students have been assigned roll numbers (status=confirmed)
+  const allConfirmed = occupiedDesks.length > 0 && unidentified.length === 0;
+  const pct = allStudents.length ? Math.round((confirmed.length / allStudents.length) * 100) : 0;
 
-  const getSquareClasses = (student?: Student) => {
-    if (!student || phase === 'desks') return 'bg-muted';
+  const getSquareClasses = (student: Student) => {
     switch (student.status) {
       case 'neutral': return 'bg-muted';
       case 'identified': return 'bg-success/15 border-success/40';
@@ -94,14 +119,18 @@ const LiveMap = () => {
 
   // Detail panel content (shared between mobile sheet and desktop sidebar)
   const DetailPanel = () => {
-    if (!selectedDesk?.student) return null;
-    const student = selectedDesk.student;
+    if (!selectedDesk || !selectedStudentId) return null;
+    const student = selectedDesk.students.find(s => s.id === selectedStudentId);
+    if (!student) return null;
 
     return (
       <div className="space-y-4 animate-fade-in">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-foreground">Student Details</h3>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedDesk(null)}>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
+            setSelectedDesk(null);
+            setSelectedStudentId(null);
+          }}>
             <X className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -123,24 +152,16 @@ const LiveMap = () => {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Confidence</p>
-                <p className="text-sm text-muted-foreground">{student.confidence}%</p>
+                <p className="text-sm text-muted-foreground">{student.manuallyAssigned ? 'Manual Entry' : `${student.confidence}%`}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Status</p>
-                <span className={cn(
-                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
-                  student.status === 'confirmed' ? 'bg-success/15 text-success' : 'bg-success/10 text-success'
-                )}>
+                <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success">
                   <CheckCircle className="h-3 w-3" />
-                  {student.status === 'confirmed' ? 'Confirmed' : 'Identified'}
+                  {student.manuallyAssigned ? 'Manually Confirmed' : 'Auto-Confirmed'}
                 </span>
               </div>
             </div>
-            {student.status !== 'confirmed' && (
-              <Button className="w-full" onClick={() => confirmStudent(selectedDesk.id)}>
-                Confirm Identity
-              </Button>
-            )}
           </>
         ) : (
           <>
@@ -164,7 +185,7 @@ const LiveMap = () => {
             <Button
               className="w-full gap-2"
               disabled={!manualRoll}
-              onClick={() => assignRoll(selectedDesk.id, manualRoll)}
+              onClick={() => assignRoll(selectedDesk.id, student.id, manualRoll)}
             >
               <Save className="h-4 w-4" />
               Assign & Confirm
@@ -226,28 +247,26 @@ const LiveMap = () => {
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden relative">
         {/* Classroom Map */}
-        <div className="flex-1 overflow-auto p-3 sm:p-6">
-          <div className="mb-3 flex items-center justify-between">
+        <div className="flex-1 overflow-auto p-3 sm:p-4">
+          <div className="mb-4 flex items-center justify-between">
             <p className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Front of Classroom
+              📍 Front of Classroom
             </p>
-            <div className="flex gap-2 sm:gap-3 text-[10px] sm:text-xs text-muted-foreground">
-              <span className="flex items-center gap-1"><span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-sm bg-success/40" /> Identified</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-sm bg-warning/40" /> Unidentified</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-sm bg-success/70" /> Confirmed</span>
+            <div className="flex gap-4 text-[10px] sm:text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-success/60" /> Auto-Confirmed</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-warning/60" /> Unidentified</span>
             </div>
           </div>
 
-          {/* Desk grid */}
+          {/* Desk grid - 4 columns x 5 rows (2-seater desks) */}
           <div className={cn(
-            'inline-grid gap-2 sm:gap-4',
-            isMobile ? 'grid-cols-4' : 'grid-cols-4'
+            'mx-auto grid w-full max-w-6xl grid-cols-4 gap-2 sm:gap-3'
           )}>
             {phase === 'empty' ? (
               Array.from({ length: 20 }).map((_, i) => (
                 <div key={i} className={cn(
                   'rounded-lg border border-dashed border-border/60 bg-muted/30 animate-fade-in',
-                  isMobile ? 'h-16 w-[calc((100vw-48px)/4)]' : 'h-24 w-28'
+                  isMobile ? 'h-20 w-full' : 'h-24 w-full'
                 )} />
               ))
             ) : (
@@ -256,26 +275,34 @@ const LiveMap = () => {
                   key={desk.id}
                   className={cn(
                     'relative rounded-lg border transition-all duration-300 animate-scale-in',
-                    isMobile ? 'h-16 w-[calc((100vw-48px)/4)]' : 'h-24 w-28',
+                    isMobile ? 'h-20 w-full' : 'h-24 w-full',
                     desk.occupied ? 'border-border bg-card shadow-sm cursor-pointer hover:shadow-md' : 'border-dashed border-border/40 bg-muted/20'
                   )}
-                  onClick={() => desk.occupied && phase === 'ready' && setSelectedDesk(desk)}
                 >
-                  {desk.occupied && desk.student && phase !== 'desks' && (
-                    <div className="flex h-full items-center justify-center p-1 sm:p-2">
-                      <div className={cn(
-                        'flex items-center justify-center rounded-lg border text-[10px] sm:text-xs font-medium transition-all duration-500',
-                        isMobile ? 'h-10 w-10' : 'h-14 w-14',
-                        getSquareClasses(desk.student)
-                      )}>
-                        {phase === 'ready' || phase === 'students' ? (
-                          desk.student.isIdentified && desk.student.status !== 'neutral'
-                            ? <span className="text-foreground">{desk.student.rollNumber}</span>
-                            : desk.student.status === 'unidentified'
-                              ? <span className="text-warning">?</span>
-                              : null
-                        ) : null}
-                      </div>
+                  {desk.occupied && phase !== 'desks' && (
+                    <div className="flex h-full items-center justify-center gap-2 p-1.5 sm:p-2">
+                      {desk.students.map((student) => (
+                        <div
+                          key={student.id}
+                          onClick={() => {
+                            setSelectedDesk(desk);
+                            setSelectedStudentId(student.id);
+                          }}
+                          className={cn(
+                            'flex items-center justify-center rounded-md border text-[8px] sm:text-[9px] font-semibold transition-all duration-500 cursor-pointer hover:shadow-sm',
+                            isMobile ? 'h-9 w-9' : 'h-11 w-11',
+                            getSquareClasses(student)
+                          )}
+                        >
+                          {phase === 'ready' || phase === 'students' ? (
+                            student.isIdentified && student.status !== 'neutral'
+                              ? <span className="text-foreground text-center line-clamp-1">{student.rollNumber}</span>
+                              : student.status === 'unidentified'
+                                ? <span className="text-warning text-sm font-bold">?</span>
+                                : null
+                          ) : null}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -287,14 +314,14 @@ const LiveMap = () => {
         {/* Desktop Right Panel */}
         {!isMobile && (
           <div className="w-80 shrink-0 border-l border-border bg-card overflow-auto">
-            {selectedDesk?.student ? (
+            {selectedDesk && selectedStudentId ? (
               <div className="p-5">
                 <DetailPanel />
               </div>
             ) : (
               <div className="flex h-full items-center justify-center p-6">
                 <p className="text-sm text-muted-foreground text-center">
-                  Click a student on the map to view details
+                  Click a student to view details
                 </p>
               </div>
             )}
@@ -302,7 +329,7 @@ const LiveMap = () => {
         )}
 
         {/* Mobile Bottom Sheet */}
-        {isMobile && selectedDesk?.student && (
+        {isMobile && selectedDesk && selectedStudentId && (
           <div className="absolute inset-x-0 bottom-0 z-50 bg-card border-t border-border rounded-t-2xl shadow-lg max-h-[70vh] overflow-auto animate-fade-in">
             <div className="p-4">
               <DetailPanel />
@@ -321,15 +348,17 @@ const LiveMap = () => {
             >
               <span className="font-semibold text-foreground">{pct}%</span>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>{confirmed.length}/{occupiedDesks.length} confirmed</span>
+                <span>{confirmed.length}/{allStudents.length} confirmed</span>
                 <ChevronUp className={cn('h-3.5 w-3.5 transition-transform', showSummary && 'rotate-180')} />
               </div>
             </button>
             {showSummary && (
               <div className="mt-2 pt-2 border-t border-border/50 grid grid-cols-2 gap-2 text-xs animate-fade-in">
                 <div><span className="text-muted-foreground">Desks: </span><span className="font-medium text-foreground">{occupiedDesks.length}</span></div>
+                <div><span className="text-muted-foreground">Students: </span><span className="font-medium text-foreground">{allStudents.length}</span></div>
                 <div><span className="text-muted-foreground">Identified: </span><span className="font-medium text-success">{identified.length}</span></div>
                 <div><span className="text-muted-foreground">Unidentified: </span><span className="font-medium text-warning">{unidentified.length}</span></div>
+                <div><span className="text-muted-foreground">Confirmed: </span><span className="font-medium text-foreground">{confirmed.length}</span></div>
                 <div><span className="text-muted-foreground">Corrections: </span><span className="font-medium text-foreground">{corrections}</span></div>
               </div>
             )}
@@ -338,6 +367,7 @@ const LiveMap = () => {
           <div className="mx-auto flex max-w-7xl items-center justify-between text-sm">
             <div className="flex gap-6">
               <div><span className="text-muted-foreground">Desks: </span><span className="font-medium text-foreground">{occupiedDesks.length}</span></div>
+              <div><span className="text-muted-foreground">Students: </span><span className="font-medium text-foreground">{allStudents.length}</span></div>
               <div><span className="text-muted-foreground">Identified: </span><span className="font-medium text-success">{identified.length}</span></div>
               <div><span className="text-muted-foreground">Unidentified: </span><span className="font-medium text-warning">{unidentified.length}</span></div>
               <div><span className="text-muted-foreground">Confirmed: </span><span className="font-medium text-foreground">{confirmed.length}</span></div>
